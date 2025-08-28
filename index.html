@@ -20,40 +20,40 @@
  footer { margin-top: 16px; color: #555; font-size: 0.9rem; }
 </style>
 <link rel="stylesheet" href="styles.css">
-
 </head>
 <body>
  <h1>Image Filtering & Feature Extraction</h1>
 
  <div class="bar card">
- <input type="file" id="uploader" accept="image/*" />
- <label for="mode">Mode:</label>
- <select id="mode">
- <option value="filter">Image Filtering Techniques</option>
- <option value="features">Feature Extraction</option>
- </select>
+   <input type="file" id="uploader" accept="image/*" />
+   <label for="mode">Mode:</label>
+   <select id="mode">
+     <option value="filter">Image Filtering Techniques</option>
+     <option value="features">Feature Extraction</option>
+   </select>
 
- <label for="technique">Technique:</label>
- <select id="technique"></select>
+   <label for="technique">Technique:</label>
+   <select id="technique"></select>
 
- <button id="runBtn" disabled>Run</button>
- <button id="downloadBtn" disabled>Download Result</button>
- <small id="cvStatus">Loading OpenCV…</small>
+   <button id="runBtn" disabled>Run</button>
+   <button id="downloadBtn" disabled>Download Result</button>
+   <button id="uploadS3Btn" disabled>Upload Result to S3</button>
+   <small id="cvStatus">Loading OpenCV…</small>
  </div>
 
  <div class="card">
- <div id="dynamicControls" class="controls"></div>
+   <div id="dynamicControls" class="controls"></div>
  </div>
 
  <div class="panel">
- <div class="card">
- <h3>Original</h3>
- <img id="inputImg" alt="input" />
- </div>
- <div class="card">
- <h3>Result</h3>
- <canvas id="output"></canvas>
- </div>
+   <div class="card">
+     <h3>Original</h3>
+     <img id="inputImg" alt="input" />
+   </div>
+   <div class="card">
+     <h3>Result</h3>
+     <canvas id="output"></canvas>
+   </div>
  </div>
 
  <!-- OpenCV.js -->
@@ -65,6 +65,7 @@
  const outputCanvas = document.getElementById('output');
  const runBtn = document.getElementById('runBtn');
  const downloadBtn = document.getElementById('downloadBtn');
+ const uploadS3Btn = document.getElementById('uploadS3Btn');
  const modeSel = document.getElementById('mode');
  const techSel = document.getElementById('technique');
  const dynControls = document.getElementById('dynamicControls');
@@ -72,29 +73,29 @@
 
  // --- Technique Lists ---
  const FILTERS = [
- { id: 'grayscale', label: 'Grayscale' },
- { id: 'gaussian', label: 'Gaussian Blur' },
- { id: 'median', label: 'Median Blur' },
- { id: 'sharpen', label: 'Sharpen' },
- { id: 'canny', label: 'Edge Detection (Canny)' },
- { id: 'sobel', label: 'Sobel Gradients' },
- { id: 'bilateral', label: 'Bilateral Filter' },
+   { id: 'grayscale', label: 'Grayscale' },
+   { id: 'gaussian', label: 'Gaussian Blur' },
+   { id: 'median', label: 'Median Blur' },
+   { id: 'sharpen', label: 'Sharpen' },
+   { id: 'canny', label: 'Edge Detection (Canny)' },
+   { id: 'sobel', label: 'Sobel Gradients' },
+   { id: 'bilateral', label: 'Bilateral Filter' },
  ];
 
  const FEATURES = [
- { id: 'orb', label: 'ORB Keypoints' },
- { id: 'shi', label: 'Shi-Tomasi Corners' }
+   { id: 'orb', label: 'ORB Keypoints' },
+   { id: 'shi', label: 'Shi-Tomasi Corners' }
  ];
 
  function populateTechniques() {
- techSel.innerHTML = '';
- const list = modeSel.value === 'filter' ? FILTERS : FEATURES;
- for (const t of list) {
- const opt = document.createElement('option');
- opt.value = t.id; opt.textContent = t.label;
- techSel.appendChild(opt);
- }
- buildDynamicControls();
+   techSel.innerHTML = '';
+   const list = modeSel.value === 'filter' ? FILTERS : FEATURES;
+   for (const t of list) {
+     const opt = document.createElement('option');
+     opt.value = t.id; opt.textContent = t.label;
+     techSel.appendChild(opt);
+   }
+   buildDynamicControls();
  }
 
  modeSel.addEventListener('change', populateTechniques);
@@ -102,208 +103,231 @@
 
  // --- Image Load ---
  uploader.addEventListener('change', (e) => {
- const file = e.target.files?.[0];
- if (!file) return;
- const url = URL.createObjectURL(file);
- inputImg.onload = () => {
- runBtn.disabled = false;
- URL.revokeObjectURL(url);
- matchCanvasToImage();
- };
- inputImg.src = url;
+   const file = e.target.files?.[0];
+   if (!file) return;
+   const url = URL.createObjectURL(file);
+   inputImg.onload = () => {
+     runBtn.disabled = false;
+     URL.revokeObjectURL(url);
+     matchCanvasToImage();
+   };
+   inputImg.src = url;
  });
 
  function matchCanvasToImage() {
- outputCanvas.width = inputImg.naturalWidth || inputImg.width;
- outputCanvas.height = inputImg.naturalHeight || inputImg.height;
+   outputCanvas.width = inputImg.naturalWidth || inputImg.width;
+   outputCanvas.height = inputImg.naturalHeight || inputImg.height;
  }
 
  function buildDynamicControls() {
- dynControls.innerHTML = '';
- const tech = techSel.value;
- const addRange = (id, label, min, max, step, value) => {
- const wrap = document.createElement('div');
- const lab = document.createElement('label');
- lab.htmlFor = id; lab.textContent = `${label}:`;
- const rng = document.createElement('input');
- rng.type = 'range'; rng.id = id; rng.min = min; rng.max = max; rng.step = step; rng.value = value;
- const val = document.createElement('span');
- val.id = id + '_val'; val.textContent = value;
- rng.addEventListener('input', () => val.textContent = rng.value);
- wrap.appendChild(lab); wrap.appendChild(rng); wrap.appendChild(val);
- dynControls.appendChild(wrap);
- };
- const addSelect = (id, label, options) => {
- const wrap = document.createElement('div');
- const lab = document.createElement('label');
- lab.htmlFor = id; lab.textContent = `${label}:`;
- const sel = document.createElement('select'); sel.id = id;
- options.forEach(o => {
- const opt = document.createElement('option'); opt.value = o.value; opt.textContent = o.label;
- sel.appendChild(opt);
- });
- wrap.appendChild(lab); wrap.appendChild(sel);
- dynControls.appendChild(wrap);
- };
+   dynControls.innerHTML = '';
+   const tech = techSel.value;
+   const addRange = (id, label, min, max, step, value) => {
+     const wrap = document.createElement('div');
+     const lab = document.createElement('label');
+     lab.htmlFor = id; lab.textContent = `${label}:`;
+     const rng = document.createElement('input');
+     rng.type = 'range'; rng.id = id; rng.min = min; rng.max = max; rng.step = step; rng.value = value;
+     const val = document.createElement('span');
+     val.id = id + '_val'; val.textContent = value;
+     rng.addEventListener('input', () => val.textContent = rng.value);
+     wrap.appendChild(lab); wrap.appendChild(rng); wrap.appendChild(val);
+     dynControls.appendChild(wrap);
+   };
+   const addSelect = (id, label, options) => {
+     const wrap = document.createElement('div');
+     const lab = document.createElement('label');
+     lab.htmlFor = id; lab.textContent = `${label}:`;
+     const sel = document.createElement('select'); sel.id = id;
+     options.forEach(o => {
+       const opt = document.createElement('option'); opt.value = o.value; opt.textContent = o.label;
+       sel.appendChild(opt);
+     });
+     wrap.appendChild(lab); wrap.appendChild(sel);
+     dynControls.appendChild(wrap);
+   };
 
- if (modeSel.value === 'filter') {
- if (tech === 'gaussian') {
- addSelect('gaussK', 'Kernel', [
- {value: '3', label: '3x3'}, {value: '5', label: '5x5'}, {value: '7', label: '7x7'}
- ]);
- } else if (tech === 'median') {
- addSelect('medianK', 'Kernel', [
- {value: '3', label: '3'}, {value: '5', label: '5'}, {value: '7', label: '7'}
- ]);
- } else if (tech === 'bilateral') {
- addRange('bil_d', 'Diameter', 1, 15, 1, 9);
- addRange('bil_sigmaColor', 'Sigma Color', 10, 200, 5, 75);
- addRange('bil_sigmaSpace', 'Sigma Space', 10, 200, 5, 75);
- } else if (tech === 'canny') {
- addRange('canny_t1', 'Threshold 1', 0, 255, 1, 50);
- addRange('canny_t2', 'Threshold 2', 0, 255, 1, 150);
- } else if (tech === 'sobel') {
- addSelect('sobel_dir', 'Direction', [
- {value: 'x', label: 'X'}, {value: 'y', label: 'Y'}
- ]);
- addSelect('sobel_k', 'Kernel', [
- {value: '3', label: '3'}, {value: '5', label: '5'}, {value: '7', label: '7'}
- ]);
- }
- } else {
- if (tech === 'orb') {
- addRange('orb_n', 'Max Features', 50, 1000, 10, 500);
- } else if (tech === 'shi') {
- addRange('shi_n', 'Max Corners', 50, 1000, 10, 200);
- addRange('shi_q', 'Quality (×100)', 1, 100, 1, 10);
- addRange('shi_d', 'Min Distance', 1, 20, 1, 5);
- }
- }
+   if (modeSel.value === 'filter') {
+     if (tech === 'gaussian') {
+       addSelect('gaussK', 'Kernel', [
+         {value: '3', label: '3x3'}, {value: '5', label: '5x5'}, {value: '7', label: '7x7'}
+       ]);
+     } else if (tech === 'median') {
+       addSelect('medianK', 'Kernel', [
+         {value: '3', label: '3'}, {value: '5', label: '5'}, {value: '7', label: '7'}
+       ]);
+     } else if (tech === 'bilateral') {
+       addRange('bil_d', 'Diameter', 1, 15, 1, 9);
+       addRange('bil_sigmaColor', 'Sigma Color', 10, 200, 5, 75);
+       addRange('bil_sigmaSpace', 'Sigma Space', 10, 200, 5, 75);
+     } else if (tech === 'canny') {
+       addRange('canny_t1', 'Threshold 1', 0, 255, 1, 50);
+       addRange('canny_t2', 'Threshold 2', 0, 255, 1, 150);
+     } else if (tech === 'sobel') {
+       addSelect('sobel_dir', 'Direction', [
+         {value: 'x', label: 'X'}, {value: 'y', label: 'Y'}
+       ]);
+       addSelect('sobel_k', 'Kernel', [
+         {value: '3', label: '3'}, {value: '5', label: '5'}, {value: '7', label: '7'}
+       ]);
+     }
+   } else {
+     if (tech === 'orb') {
+       addRange('orb_n', 'Max Features', 50, 1000, 10, 500);
+     } else if (tech === 'shi') {
+       addRange('shi_n', 'Max Corners', 50, 1000, 10, 200);
+       addRange('shi_q', 'Quality (×100)', 1, 100, 1, 10);
+       addRange('shi_d', 'Min Distance', 1, 20, 1, 5);
+     }
+   }
  }
 
  function onOpenCvReady() {
- cv['onRuntimeInitialized'] = () => {
- cvStatus.textContent = 'OpenCV loaded ✔';
- populateTechniques();
- if (inputImg.src) runBtn.disabled = false;
- };
+   cv['onRuntimeInitialized'] = () => {
+     cvStatus.textContent = 'OpenCV loaded ✔';
+     populateTechniques();
+     if (inputImg.src) runBtn.disabled = false;
+   };
  }
 
  runBtn.addEventListener('click', () => {
- if (!inputImg.src) return;
- matchCanvasToImage();
- processImage();
- downloadBtn.disabled = false;
+   if (!inputImg.src) return;
+   matchCanvasToImage();
+   processImage();
+   downloadBtn.disabled = false;
+   uploadS3Btn.disabled = false;  // enable upload after processing
  });
 
  downloadBtn.addEventListener('click', () => {
- const link = document.createElement('a');
- link.download = 'result.png';
- link.href = outputCanvas.toDataURL('image/png');
- link.click();
+   const link = document.createElement('a');
+   link.download = 'result.png';
+   link.href = outputCanvas.toDataURL('image/png');
+   link.click();
+ });
+
+ // --- Upload to S3 ---
+ uploadS3Btn.addEventListener('click', async () => {
+   try {
+     const blob = await new Promise(res => outputCanvas.toBlob(res, 'image/png'));
+     const signerResp = await fetch('http://<EC2-PUBLIC-IP>:5000/sign'); // replace with your EC2 public IP
+     const { url, key } = await signerResp.json();
+
+     const put = await fetch(url, { 
+       method: 'PUT', 
+       body: blob, 
+       headers: { 'Content-Type': 'image/png' } 
+     });
+
+     if (!put.ok) throw new Error('Upload failed: ' + put.status);
+
+     alert('✅ Uploaded to S3 as: ' + key);
+   } catch (err) {
+     alert('Upload error: ' + err.message);
+     console.error(err);
+   }
  });
 
  function processImage() {
- const src = cv.imread(inputImg);
- let dst = new cv.Mat();
- try {
- if (modeSel.value === 'filter') {
- const t = techSel.value;
- if (t === 'grayscale') {
- cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
- cv.cvtColor(dst, dst, cv.COLOR_GRAY2RGBA);
- } else if (t === 'gaussian') {
- const k = parseInt(document.getElementById('gaussK').value, 10);
- cv.GaussianBlur(src, dst, new cv.Size(k, k), 0, 0, cv.BORDER_DEFAULT);
- } else if (t === 'median') {
- const k = parseInt(document.getElementById('medianK').value, 10);
- cv.medianBlur(src, dst, k);
- } else if (t === 'bilateral') {
- let d = +document.getElementById('bil_d').value;
- let sc = +document.getElementById('bil_sigmaColor').value;
- let ss = +document.getElementById('bil_sigmaSpace').value;
- cv.cvtColor(src, dst, cv.COLOR_RGBA2RGB);
- cv.bilateralFilter(dst, dst, d, sc, ss, cv.BORDER_DEFAULT);
- cv.cvtColor(dst, dst, cv.COLOR_RGB2RGBA);
- } else if (t === 'sharpen') {
- let kernel = cv.matFromArray(3, 3, cv.CV_32F, [
- 0, -1, 0,
- -1, 5, -1,
- 0, -1, 0
- ]);
- cv.filter2D(src, dst, cv.CV_8U, kernel);
- kernel.delete();
- } else if (t === 'canny') {
- let t1 = +document.getElementById('canny_t1').value;
- let t2 = +document.getElementById('canny_t2').value;
- let gray = new cv.Mat();
- cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
- cv.Canny(gray, dst, t1, t2, 3, false);
- cv.cvtColor(dst, dst, cv.COLOR_GRAY2RGBA);
- gray.delete();
- } else if (t === 'sobel') {
- const dir = document.getElementById('sobel_dir').value;
- const k = parseInt(document.getElementById('sobel_k').value, 10);
- let gray = new cv.Mat(), grad = new cv.Mat(), absGrad = new cv.Mat();
- cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
- const dx = dir === 'x' ? 1 : 0;
- const dy = dir === 'y' ? 1 : 0;
- cv.Sobel(gray, grad, cv.CV_16S, dx, dy, k, 1, 0, cv.BORDER_DEFAULT);
- cv.convertScaleAbs(grad, absGrad);
- cv.cvtColor(absGrad, dst, cv.COLOR_GRAY2RGBA);
- gray.delete(); grad.delete(); absGrad.delete();
- }
- } else {
- const t = techSel.value;
- if (t === 'orb') {
- let orbN = +document.getElementById('orb_n').value;
- let gray = new cv.Mat();
- cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+   const src = cv.imread(inputImg);
+   let dst = new cv.Mat();
+   try {
+     if (modeSel.value === 'filter') {
+       const t = techSel.value;
+       if (t === 'grayscale') {
+         cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
+         cv.cvtColor(dst, dst, cv.COLOR_GRAY2RGBA);
+       } else if (t === 'gaussian') {
+         const k = parseInt(document.getElementById('gaussK').value, 10);
+         cv.GaussianBlur(src, dst, new cv.Size(k, k), 0, 0, cv.BORDER_DEFAULT);
+       } else if (t === 'median') {
+         const k = parseInt(document.getElementById('medianK').value, 10);
+         cv.medianBlur(src, dst, k);
+       } else if (t === 'bilateral') {
+         let d = +document.getElementById('bil_d').value;
+         let sc = +document.getElementById('bil_sigmaColor').value;
+         let ss = +document.getElementById('bil_sigmaSpace').value;
+         cv.cvtColor(src, dst, cv.COLOR_RGBA2RGB);
+         cv.bilateralFilter(dst, dst, d, sc, ss, cv.BORDER_DEFAULT);
+         cv.cvtColor(dst, dst, cv.COLOR_RGB2RGBA);
+       } else if (t === 'sharpen') {
+         let kernel = cv.matFromArray(3, 3, cv.CV_32F, [
+           0, -1, 0,
+           -1, 5, -1,
+           0, -1, 0
+         ]);
+         cv.filter2D(src, dst, cv.CV_8U, kernel);
+         kernel.delete();
+       } else if (t === 'canny') {
+         let t1 = +document.getElementById('canny_t1').value;
+         let t2 = +document.getElementById('canny_t2').value;
+         let gray = new cv.Mat();
+         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+         cv.Canny(gray, dst, t1, t2, 3, false);
+         cv.cvtColor(dst, dst, cv.COLOR_GRAY2RGBA);
+         gray.delete();
+       } else if (t === 'sobel') {
+         const dir = document.getElementById('sobel_dir').value;
+         const k = parseInt(document.getElementById('sobel_k').value, 10);
+         let gray = new cv.Mat(), grad = new cv.Mat(), absGrad = new cv.Mat();
+         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+         const dx = dir === 'x' ? 1 : 0;
+         const dy = dir === 'y' ? 1 : 0;
+         cv.Sobel(gray, grad, cv.CV_16S, dx, dy, k, 1, 0, cv.BORDER_DEFAULT);
+         cv.convertScaleAbs(grad, absGrad);
+         cv.cvtColor(absGrad, dst, cv.COLOR_GRAY2RGBA);
+         gray.delete(); grad.delete(); absGrad.delete();
+       }
+     } else {
+       const t = techSel.value;
+       if (t === 'orb') {
+         let orbN = +document.getElementById('orb_n').value;
+         let gray = new cv.Mat();
+         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
- let orb = new cv.ORB(orbN);
- let keypoints = new cv.KeyPointVector();
- orb.detect(gray, keypoints);
+         let orb = new cv.ORB(orbN);
+         let keypoints = new cv.KeyPointVector();
+         orb.detect(gray, keypoints);
 
- src.copyTo(dst);
- for (let i = 0; i < keypoints.size(); i++) {
- const kp = keypoints.get(i);
- cv.circle(dst, new cv.Point(kp.pt.x, kp.pt.y), 3, [0, 255, 0, 255], 2);
- }
- gray.delete(); keypoints.delete(); orb.delete();
- } else if (t === 'shi') {
- let maxCorners = +document.getElementById('shi_n').value;
- let quality = +document.getElementById('shi_q').value / 100.0;
- let minDist = +document.getElementById('shi_d').value;
+         src.copyTo(dst);
+         for (let i = 0; i < keypoints.size(); i++) {
+           const kp = keypoints.get(i);
+           cv.circle(dst, new cv.Point(kp.pt.x, kp.pt.y), 3, [0, 255, 0, 255], 2);
+         }
+         gray.delete(); keypoints.delete(); orb.delete();
+       } else if (t === 'shi') {
+         let maxCorners = +document.getElementById('shi_n').value;
+         let quality = +document.getElementById('shi_q').value / 100.0;
+         let minDist = +document.getElementById('shi_d').value;
 
- let gray = new cv.Mat();
- cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
- let corners = new cv.Mat();
- cv.goodFeaturesToTrack(gray, corners, maxCorners, quality, minDist);
+         let gray = new cv.Mat();
+         cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+         let corners = new cv.Mat();
+         cv.goodFeaturesToTrack(gray, corners, maxCorners, quality, minDist);
 
- src.copyTo(dst);
- for (let i = 0; i < corners.rows; i++) {
- let x = corners.floatAt(i, 0);
- let y = corners.floatAt(i, 1);
- cv.circle(dst, new cv.Point(x, y), 3, [255, 0, 0, 255], 2);
- }
- gray.delete(); corners.delete();
- }
- }
+         src.copyTo(dst);
+         for (let i = 0; i < corners.rows; i++) {
+           let x = corners.floatAt(i, 0);
+           let y = corners.floatAt(i, 1);
+           cv.circle(dst, new cv.Point(x, y), 3, [255, 0, 0, 255], 2);
+         }
+         gray.delete(); corners.delete();
+       }
+     }
 
- cv.imshow(outputCanvas, dst);
- } catch (err) {
- console.error(err);
- alert('Error: ' + err);
- } finally {
- src.delete();
- dst.delete();
- }
+     cv.imshow(outputCanvas, dst);
+   } catch (err) {
+     console.error(err);
+     alert('Error: ' + err);
+   } finally {
+     src.delete();
+     dst.delete();
+   }
  }
  </script>
 
  <footer>
- Tip: Try <em>Canny</em> for edges, <em>Gaussian</em>/<em>Median</em> for denoising, 
- <em>ORB</em> for features, and <em>Shi-Tomasi</em> for corners.
+   Tip: Try <em>Canny</em> for edges, <em>Gaussian</em>/<em>Median</em> for denoising, 
+   <em>ORB</em> for features, and <em>Shi-Tomasi</em> for corners.
  </footer>
 </body>
 </html>
